@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import List, Dict
+from copy import deepcopy
 from icecream import ic
 
 @dataclass
@@ -98,6 +99,122 @@ class IslandIslandAlmanac:
                 break
             lowest_location += 1
         return lowest_location
+    @staticmethod
+    def _check_range(test_range: range, compare_range: range) -> List[range]:
+        """
+        There are 5 possibilities
+        1. the test range does not over lap the compare range (1 range returned)
+        2. the test range overlaps to the left (2 ranges returned)
+        3. the test range overlaps to the right (2 ranges returned)
+        4. the test range covers the compare range (3 ranges returned)
+        5. the test range is less than or equal to compare range (1 range returned)
+        :param test_range: the test range
+        :param compare_range: the range to compare it to
+        :return:
+        """
+        # TODO: FIX THIS
+        left_test = test_range.start
+        right_test = test_range[-1]
+        left_compare = compare_range.start
+        right_compare = compare_range[-1]
+
+        # condition 2
+        if (
+                (left_test < left_compare) &
+                (right_test > right_compare) &
+                (right_test < right_compare)
+        ):
+            return [range(left_test, left_compare), range(right_compare, right_test + 1)]
+        # condition 3
+        if (
+                (left_test > left_compare) &
+                (left_test < right_compare) &
+                (right_test > right_compare)
+        ):
+            return [range(left_test, right_compare + 1), range(right_compare + 1, right_test + 1)]
+        # condition 4
+        if (
+                (left_test < left_compare) &
+                (right_test > right_compare)
+        ):
+            return [
+                range(left_test, left_compare),
+                range(left_compare, right_compare + 1),
+                range(right_compare + 1, right_test + 1)
+            ]
+        # condition 5
+        if (
+                (left_test >= left_compare) &
+                (right_test <= right_compare)
+        ):
+            return [test_range]
+        # condition 1 is all else
+        return [test_range]
+
+    def _split_ranges(
+            self, test_ranges: List[range], compare_ranges: List[range]
+    ) -> List[range]:
+        # TODO: FIX THIS
+        while True:
+            test_ranges = deepcopy(test_ranges)
+            initial_length = len(test_ranges)
+            for idx in range(0, initial_length):
+                test_range = test_ranges.pop(0)
+                for compare_range in compare_ranges:
+                    new_ranges = self._check_range(test_range, compare_range)
+                    test_ranges.extend(new_ranges)
+                    test_ranges = list(set(test_ranges))
+            final_length = len(test_ranges)
+            if final_length == initial_length:
+                break
+            if final_length < initial_length:
+                pass
+            if final_length > 20:
+                ic(test_ranges)
+                raise Exception
+        ic(test_ranges)
+        return test_ranges
+
+    @staticmethod
+    def _convert_ranges(
+            initial_ranges: List[range], range_dict: Dict[range, range]
+    ) -> List[range]:
+        return_list = []
+        ic(initial_ranges)
+        ic(range_dict)
+        for _range in initial_ranges:
+            for key, value in range_dict.items():
+                if (
+                        (_range.start >= key.start) &
+                        (_range[-1] <= key[-1])
+                ):
+                    distance_in = _range.start - key.start
+                    total_distance = len(_range)
+                    return_start = value.start + distance_in
+                    return_end = return_start + total_distance
+                    return_list.append(range(return_start, return_end))
+                else:
+                    return_list.append(_range)
+        return return_list
+
+    def _split_and_convert(
+            self, test_ranges: List[range], range_dict: Dict[range, range]
+    ) -> List[range]:
+        compare_ranges = list(range_dict.keys())
+        ic(compare_ranges)
+        split_ranges = self._split_ranges(test_ranges, compare_ranges)
+        ic(split_ranges)
+        return self._convert_ranges(split_ranges, range_dict)
+
+    def initial_seed_ranges_to_loc(self):
+        soil = self._split_and_convert(self.true_initial, self.seed_to_soil_dict)
+        fertilizer = self._split_and_convert(soil, self.soil_to_fertilizer_dict)
+        water = self._split_and_convert(fertilizer, self.fertilizer_to_water_dict)
+        light = self._split_and_convert(water, self.water_to_light_dict)
+        temp = self._split_and_convert(light, self.light_to_temperature_dict)
+        humidity = self._split_and_convert(temp, self.temperature_to_humidity_dict)
+        location = self._split_and_convert(humidity, self.humidity_to_location_dict)
+        return location
 
     @property
     def initial_seed_locations(self):
@@ -164,7 +281,9 @@ def part1(path):
 def part2(path):
     almanac = parse_almanac_file(path)
     lowest_location = almanac.lowest_seed_finder()
+    # locations = almanac.initial_seed_ranges_to_loc()
     return lowest_location
+
 
 
 if __name__ == '__main__':
